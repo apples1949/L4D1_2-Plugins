@@ -21,7 +21,7 @@
 #include <multicolors>
 #include <json> //https://github.com/clugg/sm-json
 
-#define PLUGIN_VERSION 			"1.2h-2024/9/20"
+#define PLUGIN_VERSION 			"1.3h-2024/9/21"
 #define PLUGIN_NAME			    "sm_translator"
 #define DEBUG 0
 
@@ -40,7 +40,7 @@ public Plugin myinfo =
 ConVar g_hCvarEnable, g_hCvarDefault;
 bool g_bCvarEnable, g_bCvarDefault;
 
-char ServerLang[3];
+char ServerLang[8];
 char ServerCompleteLang[32];
 
 bool 
@@ -52,7 +52,7 @@ StringMap
 
 public void OnPluginStart()
 {
-	GetLanguageInfo(GetServerLanguage(), ServerLang, 3, ServerCompleteLang, 32);
+	GetLanguageInfo(GetServerLanguage(), ServerLang, sizeof(ServerLang), ServerCompleteLang, sizeof(ServerCompleteLang));
 
 	LoadTranslations("sm_translator.phrases.txt");
 
@@ -65,18 +65,13 @@ public void OnPluginStart()
 	g_hCvarEnable.AddChangeHook(ConVarChanged_Cvars);
 	g_hCvarDefault.AddChangeHook(ConVarChanged_Cvars);
 
-	HookEvent("player_disconnect",      Event_PlayerDisconnect); //換圖不會觸發該事件
+	HookEvent("player_connect", 		Event_PlayerConnect); //換圖不會觸發該事件
 
 	RegConsoleCmd("sm_translator", Command_Translator, "");
 
 	g_smCodeToGoogle = new StringMap();
 	g_smCodeToGoogle.SetString("zho", "zh-TW");
 	g_smCodeToGoogle.SetString("chi", "zh-CN");
-
-	for(int i = 1; i <= MaxClients; i++)
-	{
-		g_bTranslator[i] = g_bCvarDefault;
-	}
 }
 
 // Cvars-------------------------------
@@ -174,17 +169,22 @@ Action Command_Translator(int client, int args)
 
 // Event-------------------------------
 
-void Event_PlayerDisconnect(Event event, const char[] name, bool dontBroadcast)
+void Event_PlayerConnect(Event event, const char[] name, bool dontBroadcast)
 {
-	int client = GetClientOfUserId(event.GetInt("userid"));
-	if(client == 0 || !IsClientInGame(client))
-		return;
-
-	g_bTranslator[client] = g_bCvarDefault;
-	g_bHasSelectMenu[client] = false;
+	CreateTimer(2.0, Timer_OnClientConnected, event.GetInt("userid"), TIMER_FLAG_NO_MAPCHANGE);
 }
 
 // Timer-------------------------------
+
+Action Timer_OnClientConnected(Handle timer, int userid)
+{
+	int client = GetClientOfUserId(userid);
+	if (!client || !IsClientConnected(client) || IsFakeClient(client)) return Plugin_Continue;
+
+	g_bTranslator[client] = g_bCvarDefault;
+	g_bHasSelectMenu[client] = false;
+	return Plugin_Continue;
+}
 
 Action Timer_ShowMenu(Handle timer, int userid)
 {
@@ -205,12 +205,13 @@ Action Timer_ShowMenu(Handle timer, int userid)
 
 void DoMenu(int client)
 {
-	char temp[128];
+	static char temp[128], clientLang[8], clientLangFull[128];
 	
 	Menu menu = new Menu(Menu_select);
 	menu.SetTitle("%T", "This server have a translation plugin so you can talk in your own language and it will be translated to others.Use translator?",client);
 	
-	Format(temp, sizeof(temp), "%T", "Yes, translate my word to other players",client);
+	GetLanguageInfo(GetClientLanguage(client), clientLang, sizeof(clientLang), clientLangFull, sizeof(clientLangFull));
+	Format(temp, sizeof(temp), "%T (%s)", "Yes, translate my word to other players", client, clientLangFull);
 	menu.AddItem("yes", temp);
 	
 	Format(temp, sizeof(temp), "%T (%s)","No, I want to use chat in the official server language by my own", client, ServerCompleteLang);

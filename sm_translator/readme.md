@@ -61,6 +61,7 @@ Translate chat message via Google API
 
 * <details><summary>Changelog | 版本日誌</summary>
 
+    * v1.3h (2024-9-21)
     * v1.2h (2024-9-20)
         * Update cvars
 
